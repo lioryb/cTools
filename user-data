@@ -1,44 +1,148 @@
 #cloud-config
 autoinstall:
   version: 1
+
   identity:
     hostname: SW-Dev
     username: sw
+    # SHA-512-crypt of: retym@Work2020, salt SWDev2020
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
+
   locale: en_US
   keyboard:
     layout: us
+
   ssh:
     install-server: true
+
   packages:
     - net-tools
     - openssh-server
     - gcc
     - mingw-w64
     - gcc-aarch64-linux-gnu
+
   storage:
     config:
-      - { type: disk, id: disk0, match: { size: 85899345920 }, ptable: gpt, wipe: superblock-recursive, preserve: false, name: '', grub_device: true }
-      - { type: partition, id: bios, size: 4094M, flag: bios_grub, device: disk0 }
-      - { type: partition, id: efi, size: 4095M, flag: boot, preserve: false, device: disk0 }
-      - { type: partition, id: swap, size: 4095M, preserve: false, device: disk0 }
-      - { type: partition, id: bootpart, size: 4095M, preserve: false, device: disk0 }
-      - { type: partition, id: opt, size: 4095M, preserve: false, device: disk0 }
-      - { type: partition, id: usr, size: 10240M, preserve: false, device: disk0 }
-      - { type: partition, id: var, size: 10240M, preserve: false, device: disk0 }
-      - { type: partition, id: root, size: -1, preserve: false, device: disk0 }
-      - { type: format, id: format-bios, volume: bios, fstype: bios_grub }
-      - { type: format, id: format-efi, volume: efi, fstype: fat32 }
-      - { type: format, id: format-swap, volume: swap, fstype: swap }
-      - { type: format, id: format-boot, volume: bootpart, fstype: ext4 }
-      - { type: format, id: format-opt, volume: opt, fstype: ext4 }
-      - { type: format, id: format-usr, volume: usr, fstype: ext4 }
-      - { type: format, id: format-var, volume: var, fstype: ext4 }
-      - { type: format, id: format-root, volume: root, fstype: ext4 }
-      - { type: mount, id: mount-boot, device: format-boot, path: /boot }
-      - { type: mount, id: mount-opt, device: format-opt, path: /opt }
-      - { type: mount, id: mount-usr, device: format-usr, path: /usr }
-      - { type: mount, id: mount-var, device: format-var, path: /var }
-      - { type: mount, id: mount-root, device: format-root, path: / }
+      # Disk (adjust 'match' if your disk isn't sda)
+      - id: disk0
+        type: disk
+        match: { name: sda }
+        ptable: gpt
+        wipe: superblock-recursive
+        preserve: false
+        grub_device: true
+
+      # --- Partitions (sizes per your screenshots) ---
+      - id: part-bios
+        type: partition
+        device: disk0
+        size: 4094M
+        flag: bios_grub
+
+      - id: part-efi
+        type: partition
+        device: disk0
+        size: 4095M
+        flag: boot
+
+      - id: part-swap
+        type: partition
+        device: disk0
+        size: 4095M
+
+      - id: part-boot
+        type: partition
+        device: disk0
+        size: 4095M
+
+      - id: part-opt
+        type: partition
+        device: disk0
+        size: 4095M
+
+      - id: part-usr
+        type: partition
+        device: disk0
+        size: 10240M
+
+      - id: part-var
+        type: partition
+        device: disk0
+        size: 10240M
+
+      - id: part-root
+        type: partition
+        device: disk0
+        size: -1   # rest of disk
+
+      # --- Formats ---
+      # (no format for BIOS_GRUB)
+      - id: fmt-efi
+        type: format
+        fstype: fat32
+        volume: part-efi
+
+      - id: fmt-swap
+        type: format
+        fstype: swap
+        volume: part-swap
+
+      - id: fmt-boot
+        type: format
+        fstype: ext4
+        volume: part-boot
+
+      - id: fmt-opt
+        type: format
+        fstype: ext4
+        volume: part-opt
+
+      - id: fmt-usr
+        type: format
+        fstype: ext4
+        volume: part-usr
+
+      - id: fmt-var
+        type: format
+        fstype: ext4
+        volume: part-var
+
+      - id: fmt-root
+        type: format
+        fstype: ext4
+        volume: part-root
+
+      # --- Mounts ---
+      - id: mnt-efi
+        type: mount
+        device: fmt-efi
+        path: /boot/efi
+
+      - id: mnt-boot
+        type: mount
+        device: fmt-boot
+        path: /boot
+
+      - id: mnt-opt
+        type: mount
+        device: fmt-opt
+        path: /opt
+
+      - id: mnt-usr
+        type: mount
+        device: fmt-usr
+        path: /usr
+
+      - id: mnt-var
+        type: mount
+        device: fmt-var
+        path: /var
+
+      - id: mnt-root
+        type: mount
+        device: fmt-root
+        path: /
+
   late-commands:
     - curtin in-target --target=/target -- apt-get update
