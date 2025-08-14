@@ -1,0 +1,44 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: SW-Dev
+    username: sw
+    password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
+  locale: en_US
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+  packages:
+    - net-tools
+    - openssh-server
+    - gcc
+    - mingw-w64
+    - gcc-aarch64-linux-gnu
+  storage:
+    config:
+      - { type: disk, id: disk0, match: { size: 85899345920 }, ptable: gpt, wipe: superblock-recursive, preserve: false, name: '', grub_device: true }
+      - { type: partition, id: bios, size: 4094M, flag: bios_grub, device: disk0 }
+      - { type: partition, id: efi, size: 4095M, flag: boot, preserve: false, device: disk0 }
+      - { type: partition, id: swap, size: 4095M, preserve: false, device: disk0 }
+      - { type: partition, id: bootpart, size: 4095M, preserve: false, device: disk0 }
+      - { type: partition, id: opt, size: 4095M, preserve: false, device: disk0 }
+      - { type: partition, id: usr, size: 10240M, preserve: false, device: disk0 }
+      - { type: partition, id: var, size: 10240M, preserve: false, device: disk0 }
+      - { type: partition, id: root, size: -1, preserve: false, device: disk0 }
+      - { type: format, id: format-bios, volume: bios, fstype: bios_grub }
+      - { type: format, id: format-efi, volume: efi, fstype: fat32 }
+      - { type: format, id: format-swap, volume: swap, fstype: swap }
+      - { type: format, id: format-boot, volume: bootpart, fstype: ext4 }
+      - { type: format, id: format-opt, volume: opt, fstype: ext4 }
+      - { type: format, id: format-usr, volume: usr, fstype: ext4 }
+      - { type: format, id: format-var, volume: var, fstype: ext4 }
+      - { type: format, id: format-root, volume: root, fstype: ext4 }
+      - { type: mount, id: mount-boot, device: format-boot, path: /boot }
+      - { type: mount, id: mount-opt, device: format-opt, path: /opt }
+      - { type: mount, id: mount-usr, device: format-usr, path: /usr }
+      - { type: mount, id: mount-var, device: format-var, path: /var }
+      - { type: mount, id: mount-root, device: format-root, path: / }
+  late-commands:
+    - curtin in-target --target=/target -- apt-get update
