@@ -5,7 +5,7 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
-    # SHA-512-crypt of: retym@Work2020, salt SWDev2020
+    # SHA-512-crypt of: retym@Work2020 with fixed salt SWDev2020
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -24,7 +24,7 @@ autoinstall:
 
   storage:
     config:
-      # Disk (adjust 'match' if your disk isn't sda)
+      # Disk (adjust matcher if not /dev/sda)
       - id: disk0
         type: disk
         match: { name: sda }
@@ -33,7 +33,7 @@ autoinstall:
         preserve: false
         grub_device: true
 
-      # --- Partitions (sizes per your screenshots) ---
+      # --- Partitions (per screenshots) ---
       - id: part-bios
         type: partition
         device: disk0
@@ -74,7 +74,7 @@ autoinstall:
       - id: part-root
         type: partition
         device: disk0
-        size: -1   # rest of disk
+        size: -1   # remainder
 
       # --- Formats ---
       # (no format for BIOS_GRUB)
@@ -145,4 +145,49 @@ autoinstall:
         path: /
 
   late-commands:
+    # Ensure user is in sudo group (just in case)
+    - curtin in-target --target=/target -- usermod -aG sudo sw
+    # Passwordless sudo for sw
+    - |
+      printf 'sw ALL=(ALL) NOPASSWD:ALL\n' > /target/etc/sudoers.d/90-sw
+    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/90-sw
+
+    # --- Auto-login (no login screen) ---
+
+    # For GDM3 (Ubuntu Desktop)
+    - |
+      curtin in-target --target=/target -- bash -c '
+        if [ -d /etc/gdm3 ]; then
+          cat >/etc/gdm3/custom.conf <<EOF
+[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=sw
+
+[security]
+
+[xdmcp]
+
+[greeter]
+
+[chooser]
+
+[debug]
+EOF
+        fi
+      '
+
+    # For LightDM (flavors using LightDM)
+    - |
+      curtin in-target --target=/target -- bash -c '
+        if [ -d /etc/lightdm ]; then
+          mkdir -p /etc/lightdm/lightdm.conf.d
+          cat >/etc/lightdm/lightdm.conf.d/50-autologin.conf <<EOF
+[Seat:*]
+autologin-user=sw
+autologin-user-timeout=0
+EOF
+        fi
+      '
+
+    # Regular apt update after first boot
     - curtin in-target --target=/target -- apt-get update
