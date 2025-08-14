@@ -5,7 +5,7 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
-    # SHA-512-crypt of: retym@Work2020 with salt SWDev2020
+    # SHA-512-crypt of: retym@Work2020 with fixed salt SWDev2020 (deterministic)
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -24,7 +24,7 @@ autoinstall:
 
   storage:
     config:
-      # Disk (change /dev/sda to /dev/vda or /dev/nvme0n1 if that’s your VM)
+      # Disk (change /dev/sda if needed)
       - id: disk0
         type: disk
         path: /dev/sda
@@ -33,18 +33,11 @@ autoinstall:
         preserve: false
         grub_device: true
 
-      # --- Partitions ---
-      - id: part-bios
-        type: partition
-        device: disk0
-        size: 1M
-        flag: bios_grub
-
+      # Partitions (UEFI)
       - id: part-efi
         type: partition
         device: disk0
         size: 4096M
-        flag: boot
 
       - id: part-swap
         type: partition
@@ -76,11 +69,10 @@ autoinstall:
         device: disk0
         size: -1   # remainder
 
-      # --- Formats ---
-      # (no format for BIOS_GRUB)
+      # Formats
       - id: fmt-efi
         type: format
-        fstype: fat32
+        fstype: vfat
         volume: part-efi
 
       - id: fmt-swap
@@ -113,7 +105,7 @@ autoinstall:
         fstype: ext4
         volume: part-root
 
-      # --- Mounts ---
+      # Mounts
       - { id: mnt-efi,  type: mount, device: fmt-efi,  path: /boot/efi }
       - { id: mnt-boot, type: mount, device: fmt-boot, path: /boot }
       - { id: mnt-opt,  type: mount, device: fmt-opt,  path: /opt }
@@ -122,31 +114,32 @@ autoinstall:
       - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
   late-commands:
-    # sudo + passwordless
+    # Ensure sw is in sudo group (usually already is, but explicit is fine)
     - curtin in-target --target=/target -- usermod -aG sudo sw
-    - curtin in-target --target=/target -- /bin/sh -c "printf 'sw ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-sw && chmod 440 /etc/sudoers.d/90-sw"
-
-    # Auto-login (GDM3 if present)
-    - |
-      curtin in-target --target=/target -- bash -c '
-        if [ -d /etc/gdm3 ]; then
-          cat >/etc/gdm3/custom.conf <<EOF
-[daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=sw
-EOF
-        fi
-      '
-    # Auto-login (LightDM flavors)
-    - |
-      curtin in-target --target=/target -- bash -c '
-        if [ -d /etc/lightdm ]; then
-          mkdir -p /etc/lightdm/lightdm.conf.d
-          cat >/etc/lightdm/lightdm.conf.d/50-autologin.conf <<EOF
-[Seat:*]
-autologin-user=sw
-autologin-user-timeout=0
-EOF
-        fi
-      '
+    # LightDM directory might not exist until the package is present; create it so write_files can drop a config at first boot
+    - curtin in-target --target=/target -- mkdir -p /etc/lightdm/lightdm.conf.d || true
     - curtin in-target --target=/target -- apt-get update
+
+# Write config files on the installed system (first boot), avoiding YAML quoting issues
+write_files:
+  # Passwordless sudo
+  - path: /etc/sudoers.d/90-sw
+    permissions: "0440"
+    content: |
+      sw ALL=(ALL) NOPASSWD:ALL
+
+  # GDM3 auto-login (Ubuntu Desktop)
+  - path: /etc/gdm3/custom.conf
+    permissions: "0644"
+    content: |
+      [daemon]
+      AutomaticLoginEnable=true
+      AutomaticLogin=sw
+
+  # LightDM auto-login (flavors using LightDM)
+  - path: /etc/lightdm/lightdm.conf.d/50-autologin.conf
+    permissions: "0644"
+    content: |
+      [Seat:*]
+      autologin-user=sw
+      autologin-user-timeout=0
