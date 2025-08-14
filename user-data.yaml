@@ -5,7 +5,7 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
-    # SHA-512-crypt of: retym@Work2020 with fixed salt SWDev2020
+    # SHA-512-crypt of: retym@Work2020 with salt SWDev2020
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -24,43 +24,42 @@ autoinstall:
 
   storage:
     config:
-      # Disk (adjust /dev/sda -> /dev/vda or /dev/nvme0n1 if needed)
+      # Disk (change /dev/sda to /dev/vda or /dev/nvme0n1 if that’s your VM)
       - id: disk0
         type: disk
-        match: { path: /dev/sda }
+        path: /dev/sda
         ptable: gpt
         wipe: superblock-recursive
         preserve: false
         grub_device: true
 
-      # --- Partitions (per screenshots) ---
+      # --- Partitions ---
       - id: part-bios
         type: partition
         device: disk0
-        size: 4094M
+        size: 1M
         flag: bios_grub
 
       - id: part-efi
         type: partition
         device: disk0
-        size: 4095M
-        # For EFI on GPT, set both flags
-        flags: [ boot, esp ]
+        size: 4096M
+        flag: boot
 
       - id: part-swap
         type: partition
         device: disk0
-        size: 4095M
+        size: 4096M
 
       - id: part-boot
         type: partition
         device: disk0
-        size: 4095M
+        size: 4096M
 
       - id: part-opt
         type: partition
         device: disk0
-        size: 4095M
+        size: 4096M
 
       - id: part-usr
         type: partition
@@ -81,7 +80,7 @@ autoinstall:
       # (no format for BIOS_GRUB)
       - id: fmt-efi
         type: format
-        fstype: vfat
+        fstype: fat32
         volume: part-efi
 
       - id: fmt-swap
@@ -123,11 +122,11 @@ autoinstall:
       - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
   late-commands:
-    # Ensure sw has sudo and passwordless sudo
+    # sudo + passwordless
     - curtin in-target --target=/target -- usermod -aG sudo sw
     - curtin in-target --target=/target -- /bin/sh -c "printf 'sw ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-sw && chmod 440 /etc/sudoers.d/90-sw"
 
-    # Enable auto-login (GDM3 if present)
+    # Auto-login (GDM3 if present)
     - |
       curtin in-target --target=/target -- bash -c '
         if [ -d /etc/gdm3 ]; then
@@ -138,7 +137,7 @@ AutomaticLogin=sw
 EOF
         fi
       '
-    # Enable auto-login (LightDM flavors)
+    # Auto-login (LightDM flavors)
     - |
       curtin in-target --target=/target -- bash -c '
         if [ -d /etc/lightdm ]; then
@@ -151,4 +150,3 @@ EOF
         fi
       '
     - curtin in-target --target=/target -- apt-get update
-
