@@ -24,10 +24,10 @@ autoinstall:
 
   storage:
     config:
-      # Disk (adjust matcher if not /dev/sda)
+      # Disk (adjust /dev/sda -> /dev/vda or /dev/nvme0n1 if needed)
       - id: disk0
         type: disk
-        match: { name: sda }
+        match: { path: /dev/sda }
         ptable: gpt
         wipe: superblock-recursive
         preserve: false
@@ -44,7 +44,8 @@ autoinstall:
         type: partition
         device: disk0
         size: 4095M
-        flag: boot
+        # For EFI on GPT, set both flags
+        flags: [ boot, esp ]
 
       - id: part-swap
         type: partition
@@ -80,7 +81,7 @@ autoinstall:
       # (no format for BIOS_GRUB)
       - id: fmt-efi
         type: format
-        fstype: fat32
+        fstype: vfat
         volume: part-efi
 
       - id: fmt-swap
@@ -114,47 +115,19 @@ autoinstall:
         volume: part-root
 
       # --- Mounts ---
-      - id: mnt-efi
-        type: mount
-        device: fmt-efi
-        path: /boot/efi
-
-      - id: mnt-boot
-        type: mount
-        device: fmt-boot
-        path: /boot
-
-      - id: mnt-opt
-        type: mount
-        device: fmt-opt
-        path: /opt
-
-      - id: mnt-usr
-        type: mount
-        device: fmt-usr
-        path: /usr
-
-      - id: mnt-var
-        type: mount
-        device: fmt-var
-        path: /var
-
-      - id: mnt-root
-        type: mount
-        device: fmt-root
-        path: /
+      - { id: mnt-efi,  type: mount, device: fmt-efi,  path: /boot/efi }
+      - { id: mnt-boot, type: mount, device: fmt-boot, path: /boot }
+      - { id: mnt-opt,  type: mount, device: fmt-opt,  path: /opt }
+      - { id: mnt-usr,  type: mount, device: fmt-usr,  path: /usr }
+      - { id: mnt-var,  type: mount, device: fmt-var,  path: /var }
+      - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
   late-commands:
-    # Ensure user is in sudo group (just in case)
+    # Ensure sw has sudo and passwordless sudo
     - curtin in-target --target=/target -- usermod -aG sudo sw
-    # Passwordless sudo for sw
-    - |
-      printf 'sw ALL=(ALL) NOPASSWD:ALL\n' > /target/etc/sudoers.d/90-sw
-    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/90-sw
+    - curtin in-target --target=/target -- /bin/sh -c "printf 'sw ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-sw && chmod 440 /etc/sudoers.d/90-sw"
 
-    # --- Auto-login (no login screen) ---
-
-    # For GDM3 (Ubuntu Desktop)
+    # Enable auto-login (GDM3 if present)
     - |
       curtin in-target --target=/target -- bash -c '
         if [ -d /etc/gdm3 ]; then
@@ -162,21 +135,10 @@ autoinstall:
 [daemon]
 AutomaticLoginEnable=true
 AutomaticLogin=sw
-
-[security]
-
-[xdmcp]
-
-[greeter]
-
-[chooser]
-
-[debug]
 EOF
         fi
       '
-
-    # For LightDM (flavors using LightDM)
+    # Enable auto-login (LightDM flavors)
     - |
       curtin in-target --target=/target -- bash -c '
         if [ -d /etc/lightdm ]; then
@@ -188,6 +150,5 @@ autologin-user-timeout=0
 EOF
         fi
       '
-
-    # Regular apt update after first boot
     - curtin in-target --target=/target -- apt-get update
+
