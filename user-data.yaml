@@ -5,7 +5,6 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
-    # SHA-512-crypt of: retym@Work2020 with salt SWDev2020 (deterministic)
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -24,7 +23,6 @@ autoinstall:
 
   storage:
     config:
-      # Disk (change path if your VM shows /dev/vda or /dev/nvme0n1)
       - id: disk0
         type: disk
         path: /dev/sda
@@ -33,12 +31,12 @@ autoinstall:
         preserve: false
         grub_device: true
 
-      # Partitions (UEFI setup)
-      - id: part-efi
+      # BIOS Boot partition (required for GRUB on GPT in BIOS mode)
+      - id: part-bios
         type: partition
         device: disk0
-        size: 4096M
-        flags: [ boot, esp ]
+        size: 1M
+        flag: bios_grub
 
       - id: part-swap
         type: partition
@@ -68,70 +66,35 @@ autoinstall:
       - id: part-root
         type: partition
         device: disk0
-        size: -1   # remainder
+        size: -1
 
-      # Formats
-      - id: fmt-efi
-        type: format
-        fstype: vfat
-        volume: part-efi
-
-      - id: fmt-swap
-        type: format
-        fstype: swap
-        volume: part-swap
-
-      - id: fmt-boot
-        type: format
-        fstype: ext4
-        volume: part-boot
-
-      - id: fmt-opt
-        type: format
-        fstype: ext4
-        volume: part-opt
-
-      - id: fmt-usr
-        type: format
-        fstype: ext4
-        volume: part-usr
-
-      - id: fmt-var
-        type: format
-        fstype: ext4
-        volume: part-var
-
-      - id: fmt-root
-        type: format
-        fstype: ext4
-        volume: part-root
+      # Formats (no format for part-bios)
+      - { id: fmt-swap, type: format, fstype: swap, volume: part-swap }
+      - { id: fmt-boot, type: format, fstype: ext4, volume: part-boot }
+      - { id: fmt-opt,  type: format, fstype: ext4, volume: part-opt }
+      - { id: fmt-usr,  type: format, fstype: ext4, volume: part-usr }
+      - { id: fmt-var,  type: format, fstype: ext4, volume: part-var }
+      - { id: fmt-root, type: format, fstype: ext4, volume: part-root }
 
       # Mounts
-      - { id: mnt-efi,  type: mount, device: fmt-efi,  path: /boot/efi }
       - { id: mnt-boot, type: mount, device: fmt-boot, path: /boot }
       - { id: mnt-opt,  type: mount, device: fmt-opt,  path: /opt }
       - { id: mnt-usr,  type: mount, device: fmt-usr,  path: /usr }
       - { id: mnt-var,  type: mount, device: fmt-var,  path: /var }
       - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
-  # Cloud-init config to apply on the installed system (first boot)
   user-data:
     write_files:
-      # Passwordless sudo for sw
       - path: /etc/sudoers.d/90-sw
         permissions: "0440"
         content: |
           sw ALL=(ALL) NOPASSWD:ALL
-
-      # GDM3 auto-login (Ubuntu Desktop)
       - path: /etc/gdm3/custom.conf
         permissions: "0644"
         content: |
           [daemon]
           AutomaticLoginEnable=true
           AutomaticLogin=sw
-
-      # LightDM auto-login (flavors using LightDM)
       - path: /etc/lightdm/lightdm.conf.d/50-autologin.conf
         permissions: "0644"
         content: |
