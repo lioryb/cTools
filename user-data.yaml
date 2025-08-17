@@ -5,7 +5,7 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
-    # SHA-512-crypt of: retym@Work2020 with fixed salt SWDev2020 (deterministic)
+    # SHA-512-crypt of: retym@Work2020 with salt SWDev2020 (deterministic)
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -24,7 +24,7 @@ autoinstall:
 
   storage:
     config:
-      # Disk (change /dev/sda if needed)
+      # Disk (change path if your VM shows /dev/vda or /dev/nvme0n1)
       - id: disk0
         type: disk
         path: /dev/sda
@@ -33,11 +33,12 @@ autoinstall:
         preserve: false
         grub_device: true
 
-      # Partitions (UEFI)
+      # Partitions (UEFI setup)
       - id: part-efi
         type: partition
         device: disk0
         size: 4096M
+        flags: [ boot, esp ]
 
       - id: part-swap
         type: partition
@@ -113,33 +114,31 @@ autoinstall:
       - { id: mnt-var,  type: mount, device: fmt-var,  path: /var }
       - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
+  # Cloud-init config to apply on the installed system (first boot)
+  user-data:
+    write_files:
+      # Passwordless sudo for sw
+      - path: /etc/sudoers.d/90-sw
+        permissions: "0440"
+        content: |
+          sw ALL=(ALL) NOPASSWD:ALL
+
+      # GDM3 auto-login (Ubuntu Desktop)
+      - path: /etc/gdm3/custom.conf
+        permissions: "0644"
+        content: |
+          [daemon]
+          AutomaticLoginEnable=true
+          AutomaticLogin=sw
+
+      # LightDM auto-login (flavors using LightDM)
+      - path: /etc/lightdm/lightdm.conf.d/50-autologin.conf
+        permissions: "0644"
+        content: |
+          [Seat:*]
+          autologin-user=sw
+          autologin-user-timeout=0
+
   late-commands:
-    # Ensure sw is in sudo group (usually already is, but explicit is fine)
-    - curtin in-target --target=/target -- usermod -aG sudo sw
-    # LightDM directory might not exist until the package is present; create it so write_files can drop a config at first boot
-    - curtin in-target --target=/target -- mkdir -p /etc/lightdm/lightdm.conf.d || true
     - curtin in-target --target=/target -- apt-get update
 
-# Write config files on the installed system (first boot), avoiding YAML quoting issues
-write_files:
-  # Passwordless sudo
-  - path: /etc/sudoers.d/90-sw
-    permissions: "0440"
-    content: |
-      sw ALL=(ALL) NOPASSWD:ALL
-
-  # GDM3 auto-login (Ubuntu Desktop)
-  - path: /etc/gdm3/custom.conf
-    permissions: "0644"
-    content: |
-      [daemon]
-      AutomaticLoginEnable=true
-      AutomaticLogin=sw
-
-  # LightDM auto-login (flavors using LightDM)
-  - path: /etc/lightdm/lightdm.conf.d/50-autologin.conf
-    permissions: "0644"
-    content: |
-      [Seat:*]
-      autologin-user=sw
-      autologin-user-timeout=0
