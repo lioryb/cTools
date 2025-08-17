@@ -5,6 +5,7 @@ autoinstall:
   identity:
     hostname: SW-Dev
     username: sw
+    # SHA-512-crypt of: retym@Work2020 with salt SWDev2020 (deterministic)
     password: "$6$SWDev2020$Viu/DM2nzwhvlcO0B6E5pOmrI1rCxE/Rg64A1ChwuiL.8p0GB55eBeNgB8jmjEnw.kvTxk7IqpIxk.m1Nnljc1"
 
   locale: en_US
@@ -17,10 +18,12 @@ autoinstall:
   packages:
     - net-tools
     - openssh-server
+    - git
     - gcc
     - mingw-w64
     - gcc-aarch64-linux-gnu
 
+  # BIOS mode on GPT: include tiny bios_grub; no EFI partition.
   storage:
     config:
       - id: disk0
@@ -31,7 +34,7 @@ autoinstall:
         preserve: false
         grub_device: true
 
-      # BIOS Boot partition (required for GRUB on GPT in BIOS mode)
+      # Required for GRUB on GPT in BIOS mode
       - id: part-bios
         type: partition
         device: disk0
@@ -83,18 +86,24 @@ autoinstall:
       - { id: mnt-var,  type: mount, device: fmt-var,  path: /var }
       - { id: mnt-root, type: mount, device: fmt-root, path: / }
 
+  # Cloud-init that runs on the installed system at first boot
   user-data:
     write_files:
+      # Passwordless sudo
       - path: /etc/sudoers.d/90-sw
         permissions: "0440"
         content: |
           sw ALL=(ALL) NOPASSWD:ALL
+
+      # Auto-login (GDM3)
       - path: /etc/gdm3/custom.conf
         permissions: "0644"
         content: |
           [daemon]
           AutomaticLoginEnable=true
           AutomaticLogin=sw
+
+      # Auto-login (LightDM flavors)
       - path: /etc/lightdm/lightdm.conf.d/50-autologin.conf
         permissions: "0644"
         content: |
@@ -102,6 +111,30 @@ autoinstall:
           autologin-user=sw
           autologin-user-timeout=0
 
-  late-commands:
-    - curtin in-target --target=/target -- apt-get update
+      # Ensure system dconf profile includes the 'local' system database
+      - path: /etc/dconf/profile/user
+        permissions: "0644"
+        content: |
+          user-db:user
+          system-db:local
 
+      # System-wide default Dock favorites (affects all users by default)
+      - path: /etc/dconf/db/local.d/00-favorites
+        permissions: "0644"
+        content: |
+          [org/gnome/shell]
+          favorite-apps=['org.gnome.Terminal.desktop','org.gnome.Nautilus.desktop','firefox.desktop']
+
+    # Compile dconf defaults on first boot so GNOME sees them immediately
+    runcmd:
+      - [bash, -lc, "dconf update || true"]
+
+  late-commands:
+    # Install Beyond Compare 5 (if you don't want it, remove this block)
+    - |
+      curtin in-target --target=/target -- bash -ceu '
+        apt-get update
+        cd /tmp
+        wget -q https://www.scootersoftware.com/files/bcompare-5.1.3.31238_amd64.deb
+        apt install -y ./bcompare-5.1.3.31238_amd64.deb
+      '
